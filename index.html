@@ -19,12 +19,10 @@
     p {
       font-family: 'Inter', sans-serif;
       font-size: 18px;
-      color: #111111;
       letter-spacing: -0.01em;
+      animation: colorfade 4s ease-in-out infinite;
     }
-  </style>
-</head>
-<body>
-  <p>@laht.net</p>
-</body>
-</html>
+    @keyframes colorfade {
+      0%   { color: #111111; }
+      50%  { color: #cccccc; }
+      100% { color: #111111;
