@@ -32,9 +32,113 @@
     canvas {
       display: block;
       width: 100%;
-      height: 40px;
+      height: 60px;
     }
   </style>
+</head>
+<body>
+  <p>@laht.net</p>
+  <canvas id="wave" height="60"></canvas>
+  <script>
+    const canvas = document.getElementById('wave');
+    const ctx = canvas.getContext('2d');
+    let offset = 0;
+    let boatX = null;
+    let sunX = null;
+    let sunY = null;
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      if (boatX === null) {
+        boatX = 20 + Math.random() * (canvas.width - 40);
+        do {
+          sunX = 20 + Math.random() * (canvas.width - 40);
+        } while (Math.abs(sunX - boatX) < 80);
+        sunY = 6 + Math.random() * 14;
+      }
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function getWaveY(x, off) {
+      return 30 + Math.sin((x + off) * 0.05) * 8
+                + Math.sin((x + off * 1.3) * 0.03) * 5;
+    }
+
+    function drawSun(x, y) {
+      const r = 5;
+      const rays = 8;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.strokeStyle = '#cccccc';
+      ctx.lineWidth = 1;
+      for (let i = 0; i < rays; i++) {
+        const angle = (i / rays) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(angle) * (r + 2), Math.sin(angle) * (r + 2));
+        ctx.lineTo(Math.cos(angle) * (r + 5), Math.sin(angle) * (r + 5));
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawBoat(x, y, angle) {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(angle);
+      ctx.strokeStyle = '#999999';
+      ctx.lineWidth = 1;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(-10, 0);
+      ctx.lineTo(-8, 5);
+      ctx.lineTo(8, 5);
+      ctx.lineTo(10, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(0, -14);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, -13);
+      ctx.lineTo(8, -4);
+      ctx.lineTo(0, -1);
+      ctx.closePath();
+      ctx.fillStyle = '#cccccc';
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawSun(sunX, sunY);
+      ctx.beginPath();
+      ctx.strokeStyle = '#cccccc';
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= canvas.width; x++) {
+        const y = getWaveY(x, offset);
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      const by = getWaveY(boatX, offset);
+      const dy = getWaveY(boatX + 2, offset) - getWaveY(boatX - 2, offset);
+      const angle = Math.atan2(dy, 4);
+      drawBoat(boatX, by, angle);
+      offset += 0.8;
+      requestAnimationFrame(draw);
+    }
+    draw();
+  </script>
+</body>
+</html>  </style>
 </head>
 <body>
   <p>@laht.net</p>
