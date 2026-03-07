@@ -77,7 +77,17 @@
 
     function drawSun(x, y) {
       const r = 5;
+      const glowR = 40;
       const rays = 8;
+
+      const glow = ctx.createRadialGradient(x, y, r, x, y, glowR);
+      glow.addColorStop(0, 'rgba(255, 220, 80, 0.45)');
+      glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.beginPath();
+      ctx.arc(x, y, glowR, 0, Math.PI * 2);
+      ctx.fillStyle = glow;
+      ctx.fill();
+
       ctx.save();
       ctx.translate(x, y);
       ctx.strokeStyle = '#cccccc';
