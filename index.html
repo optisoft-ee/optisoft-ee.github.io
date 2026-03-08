@@ -9,25 +9,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body {
-      height: 100%;
-      background: #ffffff;
-    }
-    canvas {
-      position: fixed;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 0;
-    }
-    .center {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1;
-    }
+    html, body { height: 100%; background: #ffffff; }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; }
+    .center { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 1; pointer-events: none; }
     p {
       font-family: 'Inter', sans-serif;
       font-size: 14px;
@@ -39,21 +23,69 @@
       50%  { color: #cccccc; }
       100% { color: #111111; }
     }
+    #tooltip {
+      position: fixed;
+      background: rgba(255,255,255,0.92);
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 7px 12px;
+      font-family: 'Inter', sans-serif;
+      font-size: 12px;
+      color: #444;
+      pointer-events: none;
+      display: none;
+      white-space: nowrap;
+      z-index: 10;
+      line-height: 1.8;
+    }
   </style>
 </head>
 <body>
   <canvas id="wave"></canvas>
-  <div class="center">
-    <p>@laht.net</p>
-  </div>
+  <div class="center"><p>@laht.net</p></div>
+  <div id="tooltip"></div>
   <script>
     const canvas = document.getElementById('wave');
     const ctx = canvas.getContext('2d');
+    const tooltip = document.getElementById('tooltip');
     let offset = 0;
-    let boatX = null;
-    let sunX = null;
-    let sunY = null;
-    let waveY = null;
+    let boatX = null, sunX = null, sunY = null, waveY = null;
+    let mouseX = -999, mouseY = -999;
+    let sunData = null;
+    let waterTemp = null;
+
+    const SUN_LAT = 59.4370, SUN_LNG = 24.7536;
+    const SEA_LAT = 59.4700, SEA_LNG = 24.8300;
+
+    async function fetchSunData() {
+      try {
+        const res = await fetch(`https://api.sunrise-sunset.org/json?lat=${SUN_LAT}&lng=${SUN_LNG}&formatted=0`);
+        const data = await res.json();
+        if (data.status === 'OK') {
+          const rise = new Date(data.results.sunrise);
+          const set  = new Date(data.results.sunset);
+          sunData = {
+            rise: rise.toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Tallinn' }),
+            set:  set.toLocaleTimeString('et-EE',  { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Tallinn' })
+          };
+        }
+      } catch (e) {
+        sunData = { rise: '—', set: '—' };
+      }
+    }
+
+    async function fetchWaterTemp() {
+      try {
+        const res = await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${SEA_LAT}&longitude=${SEA_LNG}&current=sea_surface_temperature`);
+        const data = await res.json();
+        waterTemp = data.current?.sea_surface_temperature ?? null;
+      } catch (e) {
+        waterTemp = null;
+      }
+    }
+
+    fetchSunData();
+    fetchWaterTemp();
 
     function resize() {
       canvas.width = window.innerWidth;
@@ -61,9 +93,8 @@
       waveY = canvas.height * 0.68;
       if (boatX === null) {
         boatX = 20 + Math.random() * (canvas.width - 40);
-        do {
-          sunX = 20 + Math.random() * (canvas.width - 40);
-        } while (Math.abs(sunX - boatX) < 80);
+        do { sunX = 20 + Math.random() * (canvas.width - 40); }
+        while (Math.abs(sunX - boatX) < 80);
         sunY = 20 + Math.random() * (canvas.height * 0.25);
       }
     }
@@ -75,83 +106,99 @@
                    + Math.sin((x + off * 1.3) * 0.03) * 5;
     }
 
-    function drawSun(x, y) {
-      const r = 5;
-      const glowR = 40;
-      const rays = 8;
+    function isUnderWave(mx, my) {
+      return my > getWaveY(mx, offset);
+    }
 
+    canvas.addEventListener('mousemove', (e) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+      const dx = mouseX - sunX;
+      const dy = mouseY - sunY;
+      const distSun = Math.sqrt(dx * dx + dy * dy);
+      if (distSun < 44) {
+        tooltip.innerHTML = sunData
+          ? `☀️ Tallinn<br>↑ ${sunData.rise}&nbsp;&nbsp;↓ ${sunData.set}`
+          : `☀️ Tallinn<br>Laen...`;
+        tooltip.style.display = 'block';
+        tooltip.style.left = (mouseX + 14) + 'px';
+        tooltip.style.top  = (mouseY - 10) + 'px';
+      } else if (isUnderWave(mouseX, mouseY)) {
+        tooltip.innerHTML = waterTemp !== null
+          ? `🌊 Pirita<br>${waterTemp.toFixed(1)} °C`
+          : `🌊 Pirita<br>Laen...`;
+        tooltip.style.display = 'block';
+        tooltip.style.left = (mouseX + 14) + 'px';
+        tooltip.style.top  = (mouseY - 10) + 'px';
+      } else {
+        tooltip.style.display = 'none';
+      }
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      tooltip.style.display = 'none';
+    });
+
+    function drawSun(x, y) {
+      const r = 5, glowR = 40, rays = 8;
       const glow = ctx.createRadialGradient(x, y, r, x, y, glowR);
       glow.addColorStop(0, 'rgba(255, 220, 80, 0.45)');
       glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.beginPath();
-      ctx.arc(x, y, glowR, 0, Math.PI * 2);
-      ctx.fillStyle = glow;
-      ctx.fill();
-
-      ctx.save();
-      ctx.translate(x, y);
-      ctx.strokeStyle = '#cccccc';
-      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(x, y, glowR, 0, Math.PI * 2);
+      ctx.fillStyle = glow; ctx.fill();
+      ctx.save(); ctx.translate(x, y);
+      ctx.strokeStyle = '#cccccc'; ctx.lineWidth = 1;
       for (let i = 0; i < rays; i++) {
-        const angle = (i / rays) * Math.PI * 2;
+        const a = (i / rays) * Math.PI * 2;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(angle) * (r + 2), Math.sin(angle) * (r + 2));
-        ctx.lineTo(Math.cos(angle) * (r + 5), Math.sin(angle) * (r + 5));
+        ctx.moveTo(Math.cos(a) * (r + 2), Math.sin(a) * (r + 2));
+        ctx.lineTo(Math.cos(a) * (r + 5), Math.sin(a) * (r + 5));
         ctx.stroke();
       }
-      ctx.beginPath();
-      ctx.arc(0, 0, r, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff';
-      ctx.fill();
-      ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.stroke();
       ctx.restore();
     }
 
     function drawBoat(x, y, angle) {
       ctx.save();
-      ctx.translate(x, y);
-      ctx.rotate(angle);
-      ctx.strokeStyle = '#999999';
-      ctx.lineWidth = 1;
-      ctx.fillStyle = '#ffffff';
+      ctx.translate(x, y); ctx.rotate(angle);
+      ctx.strokeStyle = '#999999'; ctx.lineWidth = 1; ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.moveTo(-10, 0);
-      ctx.lineTo(-8, 5);
-      ctx.lineTo(8, 5);
-      ctx.lineTo(10, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, 0);
-      ctx.lineTo(0, -14);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, -13);
-      ctx.lineTo(8, -4);
-      ctx.lineTo(0, -1);
-      ctx.closePath();
-      ctx.fillStyle = '#cccccc';
-      ctx.fill();
-      ctx.stroke();
+      ctx.moveTo(-10, 0); ctx.lineTo(-8, 5); ctx.lineTo(8, 5); ctx.lineTo(10, 0);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -14); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, -13); ctx.lineTo(8, -4); ctx.lineTo(0, -1);
+      ctx.closePath(); ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.stroke();
       ctx.restore();
     }
 
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawSun(sunX, sunY);
+
       ctx.beginPath();
-      ctx.strokeStyle = '#cccccc';
-      ctx.lineWidth = 1;
+      for (let x = 0; x <= canvas.width; x++) {
+        const y = getWaveY(x, offset);
+        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.lineTo(canvas.width, canvas.height);
+      ctx.lineTo(0, canvas.height);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(173, 216, 230, 0.35)';
+      ctx.fill();
+
+      ctx.beginPath(); ctx.strokeStyle = '#cccccc'; ctx.lineWidth = 1;
       for (let x = 0; x <= canvas.width; x++) {
         const y = getWaveY(x, offset);
         x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
       ctx.stroke();
+
       const by = getWaveY(boatX, offset);
       const dy = getWaveY(boatX + 2, offset) - getWaveY(boatX - 2, offset);
-      const angle = Math.atan2(dy, 4);
-      drawBoat(boatX, by, angle);
+      drawBoat(boatX, by, Math.atan2(dy, 4));
+
       offset += 0.8;
       requestAnimationFrame(draw);
     }
