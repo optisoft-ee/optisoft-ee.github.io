@@ -51,8 +51,7 @@
     let offset = 0;
     let boatX = null, sunX = null, sunY = null, waveY = null;
     let mouseX = -999, mouseY = -999;
-    let sunData = null;
-    let waterTemp = null;
+    let sunData = null, waterTemp = null;
 
     const SUN_LAT = 59.4370, SUN_LNG = 24.7536;
     const SEA_LAT = 59.4700, SEA_LNG = 24.8300;
@@ -69,9 +68,7 @@
             set:  set.toLocaleTimeString('et-EE',  { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Tallinn' })
           };
         }
-      } catch (e) {
-        sunData = { rise: '—', set: '—' };
-      }
+      } catch (e) { sunData = { rise: '—', set: '—' }; }
     }
 
     async function fetchWaterTemp() {
@@ -79,13 +76,33 @@
         const res = await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${SEA_LAT}&longitude=${SEA_LNG}&current=sea_surface_temperature`);
         const data = await res.json();
         waterTemp = data.current?.sea_surface_temperature ?? null;
-      } catch (e) {
-        waterTemp = null;
-      }
+      } catch (e) { waterTemp = null; }
     }
 
     fetchSunData();
     fetchWaterTemp();
+
+    let fish = [];
+    let bubbles = [];
+
+    function initFish() {
+      fish = [];
+      for (let i = 0; i < 5; i++) {
+        fish.push({
+          x: Math.random() * canvas.width,
+          y: waveY + 30 + Math.random() * (canvas.height - waveY - 60),
+          vx: (Math.random() < 0.5 ? 1 : -1) * (0.4 + Math.random() * 0.6),
+          vy: (Math.random() - 0.5) * 0.3,
+          size: 7 + Math.random() * 6,
+          tailPhase: Math.random() * Math.PI * 2,
+          scaredTimer: 0,
+          scaredVx: 0,
+          scaredVy: 0,
+          bubbles: i === 0,
+          bubbleTimer: 0,
+        });
+      }
+    }
 
     function resize() {
       canvas.width = window.innerWidth;
@@ -96,6 +113,7 @@
         do { sunX = 20 + Math.random() * (canvas.width - 40); }
         while (Math.abs(sunX - boatX) < 80);
         sunY = 20 + Math.random() * (canvas.height * 0.25);
+        initFish();
       }
     }
     window.addEventListener('resize', resize);
@@ -113,10 +131,20 @@
     canvas.addEventListener('mousemove', (e) => {
       mouseX = e.clientX;
       mouseY = e.clientY;
+      fish.forEach(f => {
+        const dx = mouseX - f.x;
+        const dy = mouseY - f.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < 60 && isUnderWave(mouseX, mouseY)) {
+          const angle = Math.atan2(f.y - mouseY, f.x - mouseX);
+          f.scaredTimer = 40;
+          f.scaredVx = Math.cos(angle) * 4;
+          f.scaredVy = Math.sin(angle) * 2;
+        }
+      });
       const dx = mouseX - sunX;
       const dy = mouseY - sunY;
-      const distSun = Math.sqrt(dx * dx + dy * dy);
-      if (distSun < 44) {
+      if (Math.sqrt(dx * dx + dy * dy) < 44) {
         tooltip.innerHTML = sunData
           ? `☀️ Tallinn<br>↑ ${sunData.rise}&nbsp;&nbsp;↓ ${sunData.set}`
           : `☀️ Tallinn<br>Laen...`;
@@ -135,9 +163,82 @@
       }
     });
 
-    canvas.addEventListener('mouseleave', () => {
-      tooltip.style.display = 'none';
-    });
+    canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
+    function updateFish() {
+      const minY = waveY + 12;
+      const maxY = canvas.height - 12;
+      fish.forEach(f => {
+        f.tailPhase += 0.12;
+        if (f.scaredTimer > 0) {
+          f.x += f.scaredVx; f.y += f.scaredVy;
+          f.scaredVx *= 0.92; f.scaredVy *= 0.92;
+          f.scaredTimer--;
+        } else {
+          f.vy += (Math.random() - 0.5) * 0.04;
+          f.vy *= 0.97;
+          f.x += f.vx; f.y += f.vy;
+        }
+        if (f.x < -20) f.x = canvas.width + 20;
+        if (f.x > canvas.width + 20) f.x = -20;
+        if (f.y < minY) { f.y = minY; f.vy = Math.abs(f.vy); }
+        if (f.y > maxY) { f.y = maxY; f.vy = -Math.abs(f.vy); }
+        if (f.bubbles) {
+          f.bubbleTimer++;
+          if (f.bubbleTimer >= 40) {
+            f.bubbleTimer = 0;
+            const dir = f.vx >= 0 ? 1 : -1;
+            bubbles.push({
+              x: f.x + dir * f.size,
+              y: f.y - f.size * 0.1,
+              r: 1.5 + Math.random() * 1.5,
+              vy: -(0.4 + Math.random() * 0.3),
+              vx: (Math.random() - 0.5) * 0.3,
+              life: 1.0,
+            });
+          }
+        }
+      });
+      bubbles.forEach(b => {
+        b.x += b.vx; b.y += b.vy;
+        b.life -= 0.012; b.r += 0.012;
+      });
+      bubbles = bubbles.filter(b => b.life > 0 && b.y > getWaveY(b.x, offset));
+    }
+
+    function drawBubbles() {
+      bubbles.forEach(b => {
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(150, 200, 220, ${b.life * 0.7})`;
+        ctx.lineWidth = 0.7;
+        ctx.stroke();
+      });
+    }
+
+    function drawFish(f) {
+      const dir = f.vx >= 0 ? 1 : -1;
+      const tailWag = Math.sin(f.tailPhase) * 1.2;
+      const s = f.size;
+      ctx.save();
+      ctx.translate(f.x, f.y); ctx.scale(dir, 1);
+      ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 0.8;
+      ctx.fillStyle = 'rgba(200, 225, 235, 0.7)';
+      ctx.beginPath();
+      ctx.ellipse(0, 0, s, s * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-s + 1, 0);
+      ctx.lineTo(-s - s * 0.7, -s * 0.5 + tailWag * 2);
+      ctx.lineTo(-s - s * 0.7,  s * 0.5 + tailWag * 2);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(180, 210, 225, 0.7)';
+      ctx.fill(); ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(s * 0.45, -s * 0.05, 1.2, 0, Math.PI * 2);
+      ctx.fillStyle = '#888888'; ctx.fill();
+      ctx.restore();
+    }
 
     function drawSun(x, y) {
       const r = 5, glowR = 40, rays = 8;
@@ -176,7 +277,6 @@
     function draw() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawSun(sunX, sunY);
-
       ctx.beginPath();
       for (let x = 0; x <= canvas.width; x++) {
         const y = getWaveY(x, offset);
@@ -187,18 +287,18 @@
       ctx.closePath();
       ctx.fillStyle = 'rgba(173, 216, 230, 0.35)';
       ctx.fill();
-
+      updateFish();
+      drawBubbles();
+      fish.forEach(f => drawFish(f));
       ctx.beginPath(); ctx.strokeStyle = '#cccccc'; ctx.lineWidth = 1;
       for (let x = 0; x <= canvas.width; x++) {
         const y = getWaveY(x, offset);
         x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
       ctx.stroke();
-
       const by = getWaveY(boatX, offset);
       const dy = getWaveY(boatX + 2, offset) - getWaveY(boatX - 2, offset);
       drawBoat(boatX, by, Math.atan2(dy, 4));
-
       offset += 0.8;
       requestAnimationFrame(draw);
     }
