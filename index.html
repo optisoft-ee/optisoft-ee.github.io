@@ -49,12 +49,16 @@
     const ctx = canvas.getContext('2d');
     const tooltip = document.getElementById('tooltip');
     let offset = 0;
-    let boatX = null, sunX = null, sunY = null, waveY = null;
+    let boatX = null, celestialX = null, celestialY = null, waveY = null;
     let mouseX = -999, mouseY = -999;
-    let sunData = null, waterTemp = null;
+    let sunData = null, waterTemp = null, waveHeight = null;
+    let waveAmp = 8, targetWaveAmp = 8;
+    let weather = { isDay: 1, code: 0 };
 
     const SUN_LAT = 59.4370, SUN_LNG = 24.7536;
     const SEA_LAT = 59.4700, SEA_LNG = 24.8300;
+
+    let drops = [], clouds = [], fish = [], bubbles = [];
 
     async function fetchSunData() {
       try {
@@ -71,19 +75,79 @@
       } catch (e) { sunData = { rise: '—', set: '—' }; }
     }
 
-    async function fetchWaterTemp() {
+    async function fetchMarineData() {
       try {
-        const res = await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${SEA_LAT}&longitude=${SEA_LNG}&current=sea_surface_temperature`);
+        const res = await fetch(`https://marine-api.open-meteo.com/v1/marine?latitude=${SEA_LAT}&longitude=${SEA_LNG}&current=sea_surface_temperature,wave_height`);
         const data = await res.json();
-        waterTemp = data.current?.sea_surface_temperature ?? null;
-      } catch (e) { waterTemp = null; }
+        waterTemp  = data.current?.sea_surface_temperature ?? null;
+        waveHeight = data.current?.wave_height ?? null;
+        if (waveHeight !== null) {
+          if      (waveHeight < 0.3)  targetWaveAmp = 3;
+          else if (waveHeight < 0.8)  targetWaveAmp = 8;
+          else if (waveHeight < 1.5)  targetWaveAmp = 16;
+          else                        targetWaveAmp = 26;
+        }
+      } catch (e) { waterTemp = null; waveHeight = null; }
     }
 
-    fetchSunData();
-    fetchWaterTemp();
+    async function fetchWeather() {
+      try {
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${SUN_LAT}&longitude=${SUN_LNG}&current=weather_code,is_day`);
+        const data = await res.json();
+        weather.isDay = data.current?.is_day ?? 1;
+        weather.code  = data.current?.weather_code ?? 0;
+        initClouds(); initDrops();
+      } catch (e) {}
+    }
 
-    let fish = [];
-    let bubbles = [];
+    fetchSunData(); fetchMarineData(); fetchWeather();
+
+    function isRain()   { const c = weather.code; return (c >= 51 && c <= 67) || (c >= 80 && c <= 82) || (c >= 95 && c <= 99); }
+    function isSnow()   { const c = weather.code; return c >= 71 && c <= 77; }
+    function isCloudy() { return weather.code >= 1; }
+
+    function getSkyColor() {
+      if (weather.isDay === 0) return isCloudy() ? '#1a1f2e' : '#0d1220';
+      if (isRain() || weather.code === 3) return '#c8cdd4';
+      if (isCloudy()) return '#e8edf2';
+      return '#ffffff';
+    }
+
+    function getTextColor() { return weather.isDay === 0 ? '#e0e0e0' : '#111111'; }
+
+    function initClouds() {
+      clouds = [];
+      if (!isCloudy()) return;
+      const count = weather.code >= 3 ? 5 : 3;
+      for (let i = 0; i < count; i++) {
+        clouds.push({
+          x: Math.random() * canvas.width,
+          y: canvas.height * 0.05 + Math.random() * canvas.height * 0.3,
+          vx: 0.15 + Math.random() * 0.2,
+          w: 60 + Math.random() * 80,
+          h: 20 + Math.random() * 20,
+          alpha: weather.code >= 3 ? 0.7 : 0.45,
+        });
+      }
+    }
+
+    function initDrops() {
+      drops = [];
+      if (!isRain() && !isSnow()) return;
+      const count = isSnow() ? 60 : 120;
+      for (let i = 0; i < count; i++) drops.push(newDrop(true));
+    }
+
+    function newDrop(random = false) {
+      return {
+        x: Math.random() * canvas.width,
+        y: random ? Math.random() * canvas.height : -10,
+        vy: isSnow() ? 0.6 + Math.random() * 0.5 : 6 + Math.random() * 4,
+        vx: isSnow() ? (Math.random() - 0.5) * 0.5 : -0.5,
+        len: isSnow() ? 0 : 8 + Math.random() * 4,
+        r: isSnow() ? 1.5 + Math.random() * 1.5 : 0,
+      };
+    }
 
     function initFish() {
       fish = [];
@@ -95,66 +159,59 @@
           vy: (Math.random() - 0.5) * 0.3,
           size: 7 + Math.random() * 6,
           tailPhase: Math.random() * Math.PI * 2,
-          scaredTimer: 0,
-          scaredVx: 0,
-          scaredVy: 0,
-          bubbles: i === 0,
-          bubbleTimer: 0,
+          scaredTimer: 0, scaredVx: 0, scaredVy: 0,
+          bubbles: i === 0, bubbleTimer: 0,
+          zzzTimer: Math.floor(Math.random() * 120),
         });
       }
     }
 
     function resize() {
-      canvas.width = window.innerWidth;
+      canvas.width  = window.innerWidth;
       canvas.height = window.innerHeight;
       waveY = canvas.height * 0.68;
       if (boatX === null) {
         boatX = 20 + Math.random() * (canvas.width - 40);
-        do { sunX = 20 + Math.random() * (canvas.width - 40); }
-        while (Math.abs(sunX - boatX) < 80);
-        sunY = 20 + Math.random() * (canvas.height * 0.25);
-        initFish();
+        do { celestialX = 20 + Math.random() * (canvas.width - 40); }
+        while (Math.abs(celestialX - boatX) < 80);
+        celestialY = 20 + Math.random() * (canvas.height * 0.25);
+        initFish(); initClouds(); initDrops();
       }
     }
     window.addEventListener('resize', resize);
     resize();
 
     function getWaveY(x, off) {
-      return waveY + Math.sin((x + off) * 0.05) * 8
-                   + Math.sin((x + off * 1.3) * 0.03) * 5;
+      return waveY + Math.sin((x + off) * 0.05) * waveAmp
+                   + Math.sin((x + off * 1.3) * 0.03) * (waveAmp * 0.6);
     }
 
-    function isUnderWave(mx, my) {
-      return my > getWaveY(mx, offset);
-    }
+    function isUnderWave(mx, my) { return my > getWaveY(mx, offset); }
 
     canvas.addEventListener('mousemove', (e) => {
-      mouseX = e.clientX;
-      mouseY = e.clientY;
+      mouseX = e.clientX; mouseY = e.clientY;
       fish.forEach(f => {
-        const dx = mouseX - f.x;
-        const dy = mouseY - f.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 60 && isUnderWave(mouseX, mouseY)) {
-          const angle = Math.atan2(f.y - mouseY, f.x - mouseX);
-          f.scaredTimer = 40;
-          f.scaredVx = Math.cos(angle) * 4;
-          f.scaredVy = Math.sin(angle) * 2;
+        if (weather.isDay === 0) return;
+        const dx = mouseX - f.x, dy = mouseY - f.y;
+        if (Math.sqrt(dx*dx+dy*dy) < 60 && isUnderWave(mouseX, mouseY)) {
+          const a = Math.atan2(f.y - mouseY, f.x - mouseX);
+          f.scaredTimer = 40; f.scaredVx = Math.cos(a)*4; f.scaredVy = Math.sin(a)*2;
         }
       });
-      const dx = mouseX - sunX;
-      const dy = mouseY - sunY;
-      if (Math.sqrt(dx * dx + dy * dy) < 44) {
+      const dx = mouseX - celestialX, dy = mouseY - celestialY;
+      if (Math.sqrt(dx*dx+dy*dy) < 44) {
         tooltip.innerHTML = sunData
-          ? `☀️ Tallinn<br>↑ ${sunData.rise}&nbsp;&nbsp;↓ ${sunData.set}`
-          : `☀️ Tallinn<br>Laen...`;
+          ? `${weather.isDay ? '☀️' : '🌙'} Tallinn<br>↑ ${sunData.rise}&nbsp;&nbsp;↓ ${sunData.set}`
+          : `${weather.isDay ? '☀️' : '🌙'} Laen...`;
         tooltip.style.display = 'block';
         tooltip.style.left = (mouseX + 14) + 'px';
         tooltip.style.top  = (mouseY - 10) + 'px';
       } else if (isUnderWave(mouseX, mouseY)) {
-        tooltip.innerHTML = waterTemp !== null
-          ? `🌊 Pirita<br>${waterTemp.toFixed(1)} °C`
-          : `🌊 Pirita<br>Laen...`;
+        let html = '🌊 Pirita<br>';
+        if (waterTemp !== null) html += `${waterTemp.toFixed(1)} °C`;
+        else html += 'Laen...';
+        if (waveHeight !== null) html += `&nbsp;&nbsp;↕ ${waveHeight.toFixed(2)} m`;
+        tooltip.innerHTML = html;
         tooltip.style.display = 'block';
         tooltip.style.left = (mouseX + 14) + 'px';
         tooltip.style.top  = (mouseY - 10) + 'px';
@@ -162,143 +219,189 @@
         tooltip.style.display = 'none';
       }
     });
-
     canvas.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
 
-    function updateFish() {
-      const minY = waveY + 12;
-      const maxY = canvas.height - 12;
-      fish.forEach(f => {
-        f.tailPhase += 0.12;
-        if (f.scaredTimer > 0) {
-          f.x += f.scaredVx; f.y += f.scaredVy;
-          f.scaredVx *= 0.92; f.scaredVy *= 0.92;
-          f.scaredTimer--;
-        } else {
-          f.vy += (Math.random() - 0.5) * 0.04;
-          f.vy *= 0.97;
-          f.x += f.vx; f.y += f.vy;
-        }
-        if (f.x < -20) f.x = canvas.width + 20;
-        if (f.x > canvas.width + 20) f.x = -20;
-        if (f.y < minY) { f.y = minY; f.vy = Math.abs(f.vy); }
-        if (f.y > maxY) { f.y = maxY; f.vy = -Math.abs(f.vy); }
-        if (f.bubbles) {
-          f.bubbleTimer++;
-          if (f.bubbleTimer >= 40) {
-            f.bubbleTimer = 0;
-            const dir = f.vx >= 0 ? 1 : -1;
-            bubbles.push({
-              x: f.x + dir * f.size,
-              y: f.y - f.size * 0.1,
-              r: 1.5 + Math.random() * 1.5,
-              vy: -(0.4 + Math.random() * 0.3),
-              vx: (Math.random() - 0.5) * 0.3,
-              life: 1.0,
-            });
-          }
-        }
-      });
-      bubbles.forEach(b => {
-        b.x += b.vx; b.y += b.vy;
-        b.life -= 0.012; b.r += 0.012;
-      });
-      bubbles = bubbles.filter(b => b.life > 0 && b.y > getWaveY(b.x, offset));
-    }
-
-    function drawBubbles() {
-      bubbles.forEach(b => {
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(150, 200, 220, ${b.life * 0.7})`;
-        ctx.lineWidth = 0.7;
-        ctx.stroke();
-      });
-    }
-
-    function drawFish(f) {
-      const dir = f.vx >= 0 ? 1 : -1;
-      const tailWag = Math.sin(f.tailPhase) * 1.2;
-      const s = f.size;
-      ctx.save();
-      ctx.translate(f.x, f.y); ctx.scale(dir, 1);
-      ctx.strokeStyle = '#aaaaaa'; ctx.lineWidth = 0.8;
-      ctx.fillStyle = 'rgba(200, 225, 235, 0.7)';
-      ctx.beginPath();
-      ctx.ellipse(0, 0, s, s * 0.5, 0, 0, Math.PI * 2);
-      ctx.fill(); ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(-s + 1, 0);
-      ctx.lineTo(-s - s * 0.7, -s * 0.5 + tailWag * 2);
-      ctx.lineTo(-s - s * 0.7,  s * 0.5 + tailWag * 2);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(180, 210, 225, 0.7)';
-      ctx.fill(); ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(s * 0.45, -s * 0.05, 1.2, 0, Math.PI * 2);
-      ctx.fillStyle = '#888888'; ctx.fill();
-      ctx.restore();
+    function drawSky() {
+      ctx.fillStyle = getSkyColor();
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
     function drawSun(x, y) {
       const r = 5, glowR = 40, rays = 8;
       const glow = ctx.createRadialGradient(x, y, r, x, y, glowR);
-      glow.addColorStop(0, 'rgba(255, 220, 80, 0.45)');
-      glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      ctx.beginPath(); ctx.arc(x, y, glowR, 0, Math.PI * 2);
+      glow.addColorStop(0, 'rgba(255,220,80,0.45)');
+      glow.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.beginPath(); ctx.arc(x, y, glowR, 0, Math.PI*2);
       ctx.fillStyle = glow; ctx.fill();
       ctx.save(); ctx.translate(x, y);
       ctx.strokeStyle = '#cccccc'; ctx.lineWidth = 1;
       for (let i = 0; i < rays; i++) {
-        const a = (i / rays) * Math.PI * 2;
+        const a = (i/rays)*Math.PI*2;
         ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * (r + 2), Math.sin(a) * (r + 2));
-        ctx.lineTo(Math.cos(a) * (r + 5), Math.sin(a) * (r + 5));
+        ctx.moveTo(Math.cos(a)*(r+2), Math.sin(a)*(r+2));
+        ctx.lineTo(Math.cos(a)*(r+5), Math.sin(a)*(r+5));
         ctx.stroke();
       }
-      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2);
-      ctx.fillStyle = '#ffffff'; ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2);
+      ctx.fillStyle='#ffffff'; ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawMoon(x, y) {
+      const r = 8;
+      const glow = ctx.createRadialGradient(x, y, r, x, y, r*5);
+      glow.addColorStop(0, 'rgba(220,230,255,0.3)');
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.beginPath(); ctx.arc(x, y, r*5, 0, Math.PI*2);
+      ctx.fillStyle = glow; ctx.fill();
+      ctx.save(); ctx.translate(x, y);
+      ctx.beginPath(); ctx.arc(0,0,r,0,Math.PI*2);
+      ctx.fillStyle = '#dde6ff'; ctx.fill();
+      ctx.beginPath(); ctx.arc(3,0,r*0.88,0,Math.PI*2);
+      ctx.fillStyle = getSkyColor(); ctx.fill();
+      ctx.restore();
+    }
+
+    function drawClouds() {
+      clouds.forEach(c => {
+        c.x += c.vx;
+        if (c.x > canvas.width + c.w) c.x = -c.w;
+        const col = weather.isDay === 0 ? `rgba(60,70,90,${c.alpha})` : `rgba(210,215,220,${c.alpha})`;
+        ctx.save(); ctx.translate(c.x, c.y); ctx.fillStyle = col;
+        ctx.beginPath(); ctx.ellipse(0,0,c.w*0.5,c.h*0.4,0,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(-c.w*0.2,c.h*0.1,c.w*0.35,c.h*0.35,0,0,Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(c.w*0.2,c.h*0.1,c.w*0.3,c.h*0.3,0,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+      });
+    }
+
+    function drawDrops() {
+      drops.forEach(d => {
+        d.x += d.vx; d.y += d.vy;
+        if (d.y > canvas.height) Object.assign(d, newDrop());
+        if (isSnow()) {
+          ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI*2);
+          ctx.fillStyle = 'rgba(220,230,255,0.7)'; ctx.fill();
+        } else {
+          ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x+d.vx, d.y-d.len);
+          ctx.strokeStyle = 'rgba(130,160,200,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+        }
+      });
+    }
+
+    function updateFish() {
+      const isNight = weather.isDay === 0;
+      const speedMult = isNight ? 0.15 : 1;
+      const minY = waveY + 12, maxY = canvas.height - 12;
+      fish.forEach(f => {
+        f.tailPhase += isNight ? 0.02 : 0.12;
+        if (f.scaredTimer > 0) {
+          f.x += f.scaredVx; f.y += f.scaredVy;
+          f.scaredVx *= 0.92; f.scaredVy *= 0.92; f.scaredTimer--;
+        } else {
+          f.vy += (Math.random()-0.5)*0.04*speedMult;
+          f.vy *= 0.97; f.x += f.vx*speedMult; f.y += f.vy;
+        }
+        if (f.x < -20) f.x = canvas.width+20;
+        if (f.x > canvas.width+20) f.x = -20;
+        if (f.y < minY) { f.y = minY; f.vy = Math.abs(f.vy); }
+        if (f.y > maxY) { f.y = maxY; f.vy = -Math.abs(f.vy); }
+        if (isNight && f.bubbles) {
+          f.zzzTimer++;
+          if (f.zzzTimer >= 90) {
+            f.zzzTimer = 0;
+            bubbles.push({ x: f.x, y: f.y-f.size, zzz: true, life: 1.0, vy: -0.4, size: 7+Math.random()*4 });
+          }
+        } else if (!isNight && f.bubbles) {
+          f.bubbleTimer++;
+          if (f.bubbleTimer >= 40) {
+            f.bubbleTimer = 0;
+            const dir = f.vx >= 0 ? 1 : -1;
+            bubbles.push({ x: f.x+dir*f.size, y: f.y-f.size*0.1, r: 1.5+Math.random()*1.5, vy: -(0.4+Math.random()*0.3), vx: (Math.random()-0.5)*0.3, life: 1.0, zzz: false });
+          }
+        }
+      });
+      bubbles.forEach(b => { b.y += b.vy; b.life -= 0.012; if (!b.zzz) { b.x += b.vx; b.r += 0.012; } });
+      bubbles = bubbles.filter(b => b.life > 0 && (b.zzz || b.y > getWaveY(b.x, offset)));
+    }
+
+    function drawBubbles() {
+      bubbles.forEach(b => {
+        if (b.zzz) {
+          ctx.save(); ctx.globalAlpha = b.life;
+          ctx.font = `${b.size}px Inter`; ctx.fillStyle = '#aaaaaa';
+          ctx.fillText('z', b.x, b.y); ctx.restore();
+        } else {
+          ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2);
+          ctx.strokeStyle = `rgba(150,200,220,${b.life*0.7})`; ctx.lineWidth = 0.7; ctx.stroke();
+        }
+      });
+    }
+
+    function drawFish(f) {
+      const isNight = weather.isDay === 0;
+      const dir = f.vx >= 0 ? 1 : -1;
+      const tailWag = Math.sin(f.tailPhase) * (isNight ? 0.2 : 1.2);
+      const s = f.size, ba = isNight ? 0.4 : 0.7;
+      ctx.save(); ctx.translate(f.x, f.y); ctx.scale(dir, 1);
+      ctx.strokeStyle = isNight ? '#667788' : '#aaaaaa'; ctx.lineWidth = 0.8;
+      ctx.fillStyle = `rgba(200,225,235,${ba})`;
+      ctx.beginPath(); ctx.ellipse(0,0,s,s*0.5,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-s+1,0); ctx.lineTo(-s-s*0.7,-s*0.5+tailWag*2); ctx.lineTo(-s-s*0.7,s*0.5+tailWag*2); ctx.closePath();
+      ctx.fillStyle = `rgba(180,210,225,${ba})`; ctx.fill(); ctx.stroke();
+      if (isNight) {
+        ctx.beginPath(); ctx.moveTo(s*0.35,-s*0.05); ctx.lineTo(s*0.55,-s*0.05);
+        ctx.strokeStyle = '#667788'; ctx.lineWidth = 0.8; ctx.stroke();
+      } else {
+        ctx.beginPath(); ctx.arc(s*0.45,-s*0.05,1.2,0,Math.PI*2);
+        ctx.fillStyle = '#888888'; ctx.fill();
+      }
       ctx.restore();
     }
 
     function drawBoat(x, y, angle) {
-      ctx.save();
-      ctx.translate(x, y); ctx.rotate(angle);
+      ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
       ctx.strokeStyle = '#999999'; ctx.lineWidth = 1; ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.moveTo(-10, 0); ctx.lineTo(-8, 5); ctx.lineTo(8, 5); ctx.lineTo(10, 0);
+      ctx.moveTo(-10,0); ctx.lineTo(-8,5); ctx.lineTo(8,5); ctx.lineTo(10,0);
       ctx.closePath(); ctx.fill(); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -14); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, -13); ctx.lineTo(8, -4); ctx.lineTo(0, -1);
-      ctx.closePath(); ctx.fillStyle = '#cccccc'; ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-14); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-13); ctx.lineTo(8,-4); ctx.lineTo(0,-1);
+      ctx.closePath(); ctx.fillStyle='#cccccc'; ctx.fill(); ctx.stroke();
       ctx.restore();
     }
 
     function draw() {
+      waveAmp += (targetWaveAmp - waveAmp) * 0.01;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      drawSun(sunX, sunY);
+      drawSky();
+      if (weather.isDay === 1) drawSun(celestialX, celestialY);
+      else drawMoon(celestialX, celestialY);
+      drawClouds(); drawDrops();
+      const waterColor = weather.isDay === 0 ? 'rgba(20,50,80,0.6)' : 'rgba(173,216,230,0.35)';
       ctx.beginPath();
       for (let x = 0; x <= canvas.width; x++) {
         const y = getWaveY(x, offset);
         x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
-      ctx.lineTo(canvas.width, canvas.height);
-      ctx.lineTo(0, canvas.height);
-      ctx.closePath();
-      ctx.fillStyle = 'rgba(173, 216, 230, 0.35)';
-      ctx.fill();
-      updateFish();
-      drawBubbles();
+      ctx.lineTo(canvas.width, canvas.height); ctx.lineTo(0, canvas.height); ctx.closePath();
+      ctx.fillStyle = waterColor; ctx.fill();
+      updateFish(); drawBubbles();
       fish.forEach(f => drawFish(f));
-      ctx.beginPath(); ctx.strokeStyle = '#cccccc'; ctx.lineWidth = 1;
+      const waveColor = weather.isDay === 0 ? '#334455' : '#cccccc';
+      ctx.beginPath(); ctx.strokeStyle = waveColor; ctx.lineWidth = 1;
       for (let x = 0; x <= canvas.width; x++) {
         const y = getWaveY(x, offset);
         x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
       ctx.stroke();
       const by = getWaveY(boatX, offset);
-      const dy = getWaveY(boatX + 2, offset) - getWaveY(boatX - 2, offset);
+      const dy = getWaveY(boatX+2, offset) - getWaveY(boatX-2, offset);
       drawBoat(boatX, by, Math.atan2(dy, 4));
+      const pEl = document.querySelector('p');
+      pEl.style.color = getTextColor();
+      pEl.style.animation = weather.isDay === 0 ? 'none' : '';
       offset += 0.8;
       requestAnimationFrame(draw);
     }
