@@ -108,9 +108,23 @@
 
     function getSkyColor() {
       if (weather.isDay === 0) return isCloudy() ? '#1a1f2e' : '#0d1220';
-      if (isRain() || weather.code === 3) return '#c8cdd4';
-      if (isCloudy()) return '#e8edf2';
+      if (isRain() || weather.code === 3) return '#b8bec6';
+      if (isCloudy()) return '#dde2e8';
       return '#ffffff';
+    }
+
+    function getWaterColor() {
+      if (weather.isDay === 0) return 'rgba(20,50,80,0.75)';
+      if (isRain() || weather.code >= 2) return 'rgba(90,130,160,0.55)';
+      if (isCloudy()) return 'rgba(100,145,175,0.45)';
+      return 'rgba(173,216,230,0.35)';
+    }
+
+    function getWaveLineColor() {
+      if (weather.isDay === 0) return '#334455';
+      if (isRain() || weather.code >= 2) return '#7a9db5';
+      if (isCloudy()) return '#9ab5c8';
+      return '#cccccc';
     }
 
     function getTextColor() { return weather.isDay === 0 ? '#e0e0e0' : '#111111'; }
@@ -266,7 +280,7 @@
       clouds.forEach(c => {
         c.x += c.vx;
         if (c.x > canvas.width + c.w) c.x = -c.w;
-        const col = weather.isDay === 0 ? `rgba(60,70,90,${c.alpha})` : `rgba(210,215,220,${c.alpha})`;
+        const col = weather.isDay === 0 ? `rgba(60,70,90,${c.alpha})` : `rgba(190,198,208,${c.alpha})`;
         ctx.save(); ctx.translate(c.x, c.y); ctx.fillStyle = col;
         ctx.beginPath(); ctx.ellipse(0,0,c.w*0.5,c.h*0.4,0,0,Math.PI*2); ctx.fill();
         ctx.beginPath(); ctx.ellipse(-c.w*0.2,c.h*0.1,c.w*0.35,c.h*0.35,0,0,Math.PI*2); ctx.fill();
@@ -284,7 +298,7 @@
           ctx.fillStyle = 'rgba(220,230,255,0.7)'; ctx.fill();
         } else {
           ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x+d.vx, d.y-d.len);
-          ctx.strokeStyle = 'rgba(130,160,200,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+          ctx.strokeStyle = 'rgba(90,120,160,0.55)'; ctx.lineWidth = 1; ctx.stroke();
         }
       });
     }
@@ -344,7 +358,7 @@
       const tailWag = Math.sin(f.tailPhase) * (isNight ? 0.2 : 1.2);
       const s = f.size, ba = isNight ? 0.4 : 0.7;
       ctx.save(); ctx.translate(f.x, f.y); ctx.scale(dir, 1);
-      ctx.strokeStyle = isNight ? '#667788' : '#aaaaaa'; ctx.lineWidth = 0.8;
+      ctx.strokeStyle = isNight ? '#667788' : '#8aaabb'; ctx.lineWidth = 0.8;
       ctx.fillStyle = `rgba(200,225,235,${ba})`;
       ctx.beginPath(); ctx.ellipse(0,0,s,s*0.5,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
       ctx.beginPath();
@@ -355,20 +369,20 @@
         ctx.strokeStyle = '#667788'; ctx.lineWidth = 0.8; ctx.stroke();
       } else {
         ctx.beginPath(); ctx.arc(s*0.45,-s*0.05,1.2,0,Math.PI*2);
-        ctx.fillStyle = '#888888'; ctx.fill();
+        ctx.fillStyle = '#557788'; ctx.fill();
       }
       ctx.restore();
     }
 
     function drawBoat(x, y, angle) {
       ctx.save(); ctx.translate(x, y); ctx.rotate(angle);
-      ctx.strokeStyle = '#999999'; ctx.lineWidth = 1; ctx.fillStyle = '#ffffff';
+      ctx.strokeStyle = '#778899'; ctx.lineWidth = 1; ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.moveTo(-10,0); ctx.lineTo(-8,5); ctx.lineTo(8,5); ctx.lineTo(10,0);
       ctx.closePath(); ctx.fill(); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(0,-14); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(0,-13); ctx.lineTo(8,-4); ctx.lineTo(0,-1);
-      ctx.closePath(); ctx.fillStyle='#cccccc'; ctx.fill(); ctx.stroke();
+      ctx.closePath(); ctx.fillStyle='#aabbcc'; ctx.fill(); ctx.stroke();
       ctx.restore();
     }
 
@@ -379,18 +393,16 @@
       if (weather.isDay === 1) drawSun(celestialX, celestialY);
       else drawMoon(celestialX, celestialY);
       drawClouds(); drawDrops();
-      const waterColor = weather.isDay === 0 ? 'rgba(20,50,80,0.6)' : 'rgba(173,216,230,0.35)';
       ctx.beginPath();
       for (let x = 0; x <= canvas.width; x++) {
         const y = getWaveY(x, offset);
         x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
       ctx.lineTo(canvas.width, canvas.height); ctx.lineTo(0, canvas.height); ctx.closePath();
-      ctx.fillStyle = waterColor; ctx.fill();
+      ctx.fillStyle = getWaterColor(); ctx.fill();
       updateFish(); drawBubbles();
       fish.forEach(f => drawFish(f));
-      const waveColor = weather.isDay === 0 ? '#334455' : '#cccccc';
-      ctx.beginPath(); ctx.strokeStyle = waveColor; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.strokeStyle = getWaveLineColor(); ctx.lineWidth = 1.5;
       for (let x = 0; x <= canvas.width; x++) {
         const y = getWaveY(x, offset);
         x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
