@@ -108,8 +108,9 @@
 
     function getSkyColor() {
       if (weather.isDay === 0) return isCloudy() ? '#1a1f2e' : '#0d1220';
-      if (isRain() || weather.code === 3) return '#b8bec6';
-      if (weather.code === 2) return '#e8eef4';
+      if (isRain()) return '#b8bec6';
+      if (weather.code === 3) return '#c8d4e0';
+      if (weather.code === 2) return '#ccdff0';
       if (weather.code === 1) return '#ddeeff';
       return '#ffffff';
     }
