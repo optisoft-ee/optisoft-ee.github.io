@@ -215,7 +215,7 @@
           tailPhase: Math.random() * Math.PI * 2,
           state: 'swim',
           jumpVy: 0,
-          splashTimer: 120 + Math.floor(Math.random() * 300),
+          splashTimer: i === 2 ? 150 + Math.floor(Math.random() * 300) : Infinity,
           landTimer: 0,
           particles: [],
           hasBubbles: i === 0,
@@ -394,7 +394,9 @@
           f.particles = f.particles.filter(p => p.life > 0);
           f.landTimer--;
           if (f.landTimer <= 0 && f.particles.length === 0) {
-            f.state = 'swim'; f.y = waveY + 30 + Math.random()*50;
+            f.state = 'swim';
+            f.y = getWaveY(f.x, offset) + f.size + 4;
+            f.vy = 0.5;
             f.splashTimer = 150 + Math.floor(Math.random()*350);
           }
         }
