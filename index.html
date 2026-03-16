@@ -462,9 +462,14 @@
       introProgress = Math.min(1, (Date.now() - introStart) / INTRO_DURATION);
       const targetPos = getCelestialPos();
       const margin = canvas.width * 0.08;
-      const horizon = waveY - 10;
-      celestialX = margin + (targetPos.x - margin) * introProgress;
-      celestialY = horizon + (targetPos.y - horizon) * introProgress;
+      const left = margin, right = canvas.width - margin;
+      const horizon = waveY - 10, peak = canvas.height * 0.08;
+      // Arvuta sihtpunkti t väärtus kaarel
+      const targetT = (targetPos.x - left) / (right - left);
+      // Intro ajal liigu t=0 → targetT mööda sama kaart
+      const currentT = targetT * introProgress;
+      celestialX = left + currentT * (right - left);
+      celestialY = horizon - Math.sin(currentT * Math.PI) * (horizon - peak);
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawSky();
