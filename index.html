@@ -49,11 +49,14 @@
     const ctx = canvas.getContext('2d');
     const tooltip = document.getElementById('tooltip');
     let offset = 0;
-    let boatX = null, celestialX = null, celestialY = null, waveY = null;
+    let boatX = null, waveY = null;
     let mouseX = -999, mouseY = -999;
     let sunData = null, waterTemp = null, waveHeight = null;
     let waveAmp = 8, targetWaveAmp = 8;
     let weather = { isDay: 1, code: 0 };
+
+    let celestialX = 100, celestialY = 100;
+    let sunriseTs = null, sunsetTs = null;
 
     const SUN_LAT = 59.4370, SUN_LNG = 24.7536;
     const SEA_LAT = 59.4700, SEA_LNG = 24.8300;
@@ -67,6 +70,8 @@
         if (data.status === 'OK') {
           const rise = new Date(data.results.sunrise);
           const set  = new Date(data.results.sunset);
+          sunriseTs = rise.getTime();
+          sunsetTs  = set.getTime();
           sunData = {
             rise: rise.toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Tallinn' }),
             set:  set.toLocaleTimeString('et-EE',  { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Tallinn' })
@@ -101,6 +106,30 @@
     }
 
     fetchSunData(); fetchMarineData(); fetchWeather();
+
+    function getCelestialPos() {
+      if (!sunriseTs || !sunsetTs || !waveY) return { x: canvas.width * 0.5, y: 80 };
+      const now    = Date.now();
+      const margin = canvas.width * 0.08;
+      const left   = margin;
+      const right  = canvas.width - margin;
+      const horizon = waveY - 10;
+      const peak   = canvas.height * 0.08;
+      if (weather.isDay === 1) {
+        const t = Math.max(0, Math.min(1, (now - sunriseTs) / (sunsetTs - sunriseTs)));
+        return {
+          x: left + t * (right - left),
+          y: horizon - Math.sin(t * Math.PI) * (horizon - peak)
+        };
+      } else {
+        const nextSunrise = sunriseTs + 24 * 3600 * 1000;
+        const t = Math.max(0, Math.min(1, (now - sunsetTs) / (nextSunrise - sunsetTs)));
+        return {
+          x: left + t * (right - left),
+          y: horizon - Math.sin(t * Math.PI) * (horizon - peak)
+        };
+      }
+    }
 
     function isRain()   { const c = weather.code; return (c >= 51 && c <= 67) || (c >= 80 && c <= 82) || (c >= 95 && c <= 99); }
     function isSnow()   { const c = weather.code; return c >= 71 && c <= 77; }
@@ -138,7 +167,7 @@
       for (let i = 0; i < count; i++) {
         clouds.push({
           x: Math.random() * canvas.width,
-          y: canvas.height * 0.05 + Math.random() * canvas.height * 0.3,
+          y: canvas.height * 0.05 + Math.random() * canvas.height * 0.28,
           vx: 0.15 + Math.random() * 0.2,
           w: 60 + Math.random() * 80,
           h: 20 + Math.random() * 20,
@@ -188,9 +217,6 @@
       waveY = canvas.height * 0.68;
       if (boatX === null) {
         boatX = 20 + Math.random() * (canvas.width - 40);
-        do { celestialX = 20 + Math.random() * (canvas.width - 40); }
-        while (Math.abs(celestialX - boatX) < 80);
-        celestialY = 20 + Math.random() * (canvas.height * 0.25);
         initFish(); initClouds(); initDrops();
       }
     }
@@ -390,6 +416,8 @@
 
     function draw() {
       waveAmp += (targetWaveAmp - waveAmp) * 0.01;
+      const pos = getCelestialPos();
+      celestialX = pos.x; celestialY = pos.y;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawSky();
       if (weather.isDay === 1) drawSun(celestialX, celestialY);
