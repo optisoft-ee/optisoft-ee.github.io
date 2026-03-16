@@ -108,22 +108,27 @@
     fetchSunData(); fetchMarineData(); fetchWeather();
 
     function getCelestialPos() {
-      if (!sunriseTs || !sunsetTs || !waveY) return { x: canvas.width * 0.5, y: 80 };
+      if (!waveY) return { x: canvas.width * 0.5, y: 80 };
       const now    = Date.now();
       const margin = canvas.width * 0.08;
       const left   = margin;
       const right  = canvas.width - margin;
       const horizon = waveY - 10;
       const peak   = canvas.height * 0.08;
+      // Kui API pole veel vastanud, kasuta ligikaudset Tallinna aega
+      const d = new Date();
+      const tzOffset = 2 * 3600 * 1000; // EET (UTC+2)
+      const rise = sunriseTs ?? new Date(d.getFullYear(), d.getMonth(), d.getDate(), 6, 0, 0).getTime() - d.getTimezoneOffset() * 60000 + tzOffset;
+      const set  = sunsetTs  ?? new Date(d.getFullYear(), d.getMonth(), d.getDate(), 20, 0, 0).getTime() - d.getTimezoneOffset() * 60000 + tzOffset;
       if (weather.isDay === 1) {
-        const t = Math.max(0, Math.min(1, (now - sunriseTs) / (sunsetTs - sunriseTs)));
+        const t = Math.max(0, Math.min(1, (now - rise) / (set - rise)));
         return {
           x: left + t * (right - left),
           y: horizon - Math.sin(t * Math.PI) * (horizon - peak)
         };
       } else {
-        const nextSunrise = sunriseTs + 24 * 3600 * 1000;
-        const t = Math.max(0, Math.min(1, (now - sunsetTs) / (nextSunrise - sunsetTs)));
+        const nextSunrise = rise + 24 * 3600 * 1000;
+        const t = Math.max(0, Math.min(1, (now - set) / (nextSunrise - set)));
         return {
           x: left + t * (right - left),
           y: horizon - Math.sin(t * Math.PI) * (horizon - peak)
