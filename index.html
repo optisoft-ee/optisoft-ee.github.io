@@ -346,23 +346,21 @@
       });
     }
 
-    function updateFish() {
+function updateFish() {
       const isNight = weather.isDay === 0;
       const minY = waveY + 10, maxY = canvas.height - 10;
 
       fish.forEach(f => {
+        if (!f.splashParticles) f.splashParticles = [];
         f.tailPhase += isNight ? 0.02 : 0.12;
 
         if (isNight) {
-          // Öösel ujuvad aeglaselt
-          f.vy += (Math.random()-0.5)*0.01;
-          f.vy *= 0.97;
-          f.x += f.vx * 0.15; f.y += f.vy;
+          f.vy += (Math.random()-0.5)*0.01; f.vy *= 0.97;
+          f.x += f.vx*0.15; f.y += f.vy;
           if (f.x < -20) f.x = canvas.width+20;
           if (f.x > canvas.width+20) f.x = -20;
           if (f.y < minY) { f.y = minY; f.vy = Math.abs(f.vy); }
           if (f.y > maxY) { f.y = maxY; f.vy = -Math.abs(f.vy); }
-          // zzz mullid
           if (f.bubbleTimer >= 0) {
             f.zzzTimer++;
             if (f.zzzTimer >= 90) {
@@ -374,14 +372,12 @@
         }
 
         if (f.state === 'swim') {
-          f.vy += (Math.random()-0.5)*0.04;
-          f.vy *= 0.97;
+          f.vy += (Math.random()-0.5)*0.04; f.vy *= 0.97;
           f.x += f.vx; f.y += f.vy;
           if (f.x < -20) f.x = canvas.width+20;
           if (f.x > canvas.width+20) f.x = -20;
           if (f.y < minY) { f.y = minY; f.vy = Math.abs(f.vy); }
           if (f.y > maxY) { f.y = maxY; f.vy = -Math.abs(f.vy); }
-          // Mullid
           if (f.bubbleTimer >= 0) {
             f.bubbleTimer++;
             if (f.bubbleTimer >= 40) {
@@ -390,24 +386,24 @@
               bubbles.push({ x: f.x+dir*f.size, y: f.y-f.size*0.1, r: 1.5+Math.random()*1.5, vy: -(0.4+Math.random()*0.3), vx: (Math.random()-0.5)*0.3, life: 1.0, zzz: false });
             }
           }
-          // Sulpsu taimer
           f.splashTimer--;
           if (f.splashTimer <= 0) {
+            // Hüpe — pane kala laine alla lähedale ja anna kiirus üles
+            f.y = Math.min(f.y, getWaveY(f.x, offset) + 20);
+            f.jumpVy = -(5 + Math.random() * 3);
             f.state = 'rise';
-            f.jumpVy = -(4 + Math.random() * 3);
           }
 
         } else if (f.state === 'rise') {
           f.y += f.jumpVy;
-          f.jumpVy *= 0.95;
           f.x += f.vx * 0.5;
-          if (f.y <= getWaveY(f.x, offset) - 2) {
+          if (f.y <= getWaveY(f.x, offset)) {
             f.splashParticles = spawnSplash(f.x, getWaveY(f.x, offset));
             f.state = 'air';
           }
 
         } else if (f.state === 'air') {
-          f.jumpVy += 0.25;
+          f.jumpVy += 0.28;
           f.y += f.jumpVy;
           f.x += f.vx * 0.5;
           f.splashParticles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life -= 0.07; });
@@ -434,7 +430,7 @@
 
       bubbles.forEach(b => { b.y += b.vy; b.life -= 0.012; if (!b.zzz) { b.x += b.vx; b.r += 0.012; } });
       bubbles = bubbles.filter(b => b.life > 0 && (b.zzz || b.y > getWaveY(b.x, offset)));
-    }
+    }    
 
     function drawBubbles() {
       bubbles.forEach(b => {
