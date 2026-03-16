@@ -57,6 +57,9 @@
 
     let celestialX = 100, celestialY = 100;
     let sunriseTs = null, sunsetTs = null;
+    let introProgress = 0;
+    const INTRO_DURATION = 2000; // ms
+    const introStart = Date.now();
 
     const SUN_LAT = 59.4370, SUN_LNG = 24.7536;
     const SEA_LAT = 59.4700, SEA_LNG = 24.8300;
@@ -421,8 +424,14 @@
 
     function draw() {
       waveAmp += (targetWaveAmp - waveAmp) * 0.01;
-      const pos = getCelestialPos();
-      celestialX = pos.x; celestialY = pos.y;
+      introProgress = Math.min(1, (Date.now() - introStart) / INTRO_DURATION);
+      const targetPos = getCelestialPos();
+      const margin = canvas.width * 0.08;
+      const horizon = waveY - 10;
+      const startX = margin;
+      const startY = horizon;
+      celestialX = startX + (targetPos.x - startX) * introProgress;
+      celestialY = startY + (targetPos.y - startY) * introProgress;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawSky();
       if (weather.isDay === 1) drawSun(celestialX, celestialY);
