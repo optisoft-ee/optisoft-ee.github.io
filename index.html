@@ -59,7 +59,7 @@
     let sunriseTs = null, sunsetTs = null;
     let introProgress = 0;
     const INTRO_DURATION = 2000;
-    const introStart = Date.now();
+    const introStart = null;
 
     const SUN_LAT = 59.4370, SUN_LNG = 24.7536;
     const SEA_LAT = 59.4700, SEA_LNG = 24.8300;
@@ -79,8 +79,12 @@
             rise: rise.toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Tallinn' }),
             set:  set.toLocaleTimeString('et-EE',  { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Tallinn' })
           };
-        }
-      } catch (e) { sunData = { rise: '—', set: '—' }; }
+          }
+        if (!introStart) introStart = Date.now();
+      } catch (e) {
+        sunData = { rise: '—', set: '—' };
+        if (!introStart) introStart = Date.now();
+      }
     }
 
     async function fetchMarineData() {
@@ -459,7 +463,7 @@
 
     function draw() {
       waveAmp += (targetWaveAmp - waveAmp) * 0.01;
-      introProgress = Math.min(1, (Date.now() - introStart) / INTRO_DURATION);
+      introProgress = introStart ? Math.min(1, (Date.now() - introStart) / INTRO_DURATION) : 0;
       const targetPos = getCelestialPos();
       const margin = canvas.width * 0.08;
       const left = margin, right = canvas.width - margin;
