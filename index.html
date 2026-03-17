@@ -390,21 +390,12 @@
           f.particles = f.particles.filter(p => p.life > 0);
           if (f.y >= getWaveY(f.x, offset)) {
             f.particles = spawnSplash(f.x, getWaveY(f.x, offset));
-            f.state = 'splash'; f.landTimer = 15;
-          }
-
-        } else if (f.state === 'splash') {
-          f.particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life -= 0.06; });
-          f.particles = f.particles.filter(p => p.life > 0);
-          f.landTimer--;
-          if (f.landTimer <= 0 && f.particles.length === 0) {
             f.state = 'swim';
-            f.y = waveY + 25 + Math.random() * 30;
+            f.y = getWaveY(f.x, offset) + 2;
             f.vy = 0;
             f.jumpVy = 0;
             f.splashTimer = 150 + Math.floor(Math.random()*350);
           }
-        }
       });
 
       bubbles.forEach(b => { b.y += b.vy; b.life -= 0.012; if (!b.zzz) { b.x += b.vx; b.r += 0.012; } });
