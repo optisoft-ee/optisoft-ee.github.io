@@ -396,6 +396,7 @@
             f.jumpVy = 0;
             f.splashTimer = 150 + Math.floor(Math.random()*350);
           }
+        }
       });
 
       bubbles.forEach(b => { b.y += b.vy; b.life -= 0.012; if (!b.zzz) { b.x += b.vx; b.r += 0.012; } });
