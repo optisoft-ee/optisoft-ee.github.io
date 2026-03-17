@@ -390,7 +390,7 @@
           f.particles = f.particles.filter(p => p.life > 0);
           if (f.y >= getWaveY(f.x, offset)) {
             f.particles = spawnSplash(f.x, getWaveY(f.x, offset));
-            f.state = 'splash'; f.landTimer = 50;
+            f.state = 'splash'; f.landTimer = 15;
           }
 
         } else if (f.state === 'splash') {
@@ -399,8 +399,9 @@
           f.landTimer--;
           if (f.landTimer <= 0 && f.particles.length === 0) {
             f.state = 'swim';
-            f.y = getWaveY(f.x, offset) + f.size + 4;
-            f.vy = 0.5;
+            f.y = waveY + 25 + Math.random() * 30;
+            f.vy = 0;
+            f.jumpVy = 0;
             f.splashTimer = 150 + Math.floor(Math.random()*350);
           }
         }
