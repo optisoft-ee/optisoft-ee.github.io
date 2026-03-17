@@ -66,20 +66,18 @@
 
     let drops = [], clouds = [], fish = [], bubbles = [];
 
-    async function fetchSunData() {
+  async function fetchSunData() {
       try {
-        const res = await fetch(`https://api.sunrise-sunset.org/json?lat=${SUN_LAT}&lng=${SUN_LNG}&formatted=0`);
+        const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${SUN_LAT}&longitude=${SUN_LNG}&daily=sunrise,sunset&timezone=Europe%2FTallinn&forecast_days=1`);
         const data = await res.json();
-        if (data.status === 'OK') {
-          const rise = new Date(data.results.sunrise);
-          const set  = new Date(data.results.sunset);
-          sunriseTs = rise.getTime();
-          sunsetTs  = set.getTime();
-          sunData = {
-            rise: rise.toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Tallinn' }),
-            set:  set.toLocaleTimeString('et-EE',  { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Tallinn' })
-          };
-          }
+        const rise = new Date(data.daily.sunrise[0]);
+        const set  = new Date(data.daily.sunset[0]);
+        sunriseTs = rise.getTime();
+        sunsetTs  = set.getTime();
+        sunData = {
+          rise: rise.toLocaleTimeString('et-EE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Tallinn' }),
+          set:  set.toLocaleTimeString('et-EE',  { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Tallinn' })
+        };
         if (!introStart) introStart = Date.now();
       } catch (e) {
         sunData = { rise: '—', set: '—' };
