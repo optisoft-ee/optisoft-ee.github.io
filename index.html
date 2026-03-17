@@ -468,13 +468,11 @@
       const margin = canvas.width * 0.08;
       const left = margin, right = canvas.width - margin;
       const horizon = waveY - 10, peak = canvas.height * 0.08;
-      const targetT = Math.max(0.01, (targetPos.x - left) / (right - left));
-      // Eased intro: liigu mööda kaart t=0 → targetT
-      const eased = introProgress < 1
-        ? targetT * (1 - Math.cos(introProgress * Math.PI)) / 2 + targetT * introProgress / 2
-        : targetT;
-      celestialX = left + eased * (right - left);
-      celestialY = horizon - Math.sin(eased / targetT * targetT * Math.PI) * (horizon - peak);
+      const targetT = Math.max(0.001, Math.min(1, (targetPos.x - left) / (right - left)));
+      // Liigu mööda kaart: t animeerub 0-st targetT-ni
+      const currentT = targetT * introProgress;
+      celestialX = left + currentT * (right - left);
+      celestialY = horizon - Math.sin((currentT / targetT) * Math.PI) * (horizon - peak);
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawSky();
